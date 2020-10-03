@@ -3,7 +3,10 @@
 //-------------------------------------------------- class functions --------------------------------------------------//
 retrieve_scale_factor::retrieve_scale_factor()
 {
-    file = TFile::Open("DeepCSV_ctagSF_MiniAOD94X_2017_pTincl.root");
+    //file = TFile::Open("/wk_cms2/ykao/CMSSW_9_4_10/src/ttH/Loopers/ctag_reshaping/sfs_rootfiles/DeepCSV_cTag_SFs_80X_Incl_pt20_BTV_6Mar_Extended.root");
+    file = TFile::Open("/wk_cms2/ykao/CMSSW_9_4_10/src/ttH/Loopers/ctag_reshaping/sfs_rootfiles/DeepJet_ctagSF_MiniAOD102X_2018_pTincl.root");
+    //file = TFile::Open("/wk_cms2/ykao/CMSSW_9_4_10/src/ttH/Loopers/ctag_reshaping/sfs_rootfiles/DeepJet_ctagSF_MiniAOD94X_2017_pTincl.root");
+    //file = TFile::Open("DeepCSV_ctagSF_MiniAOD94X_2017_pTincl.root");
     debug_ = false;
 }
 
@@ -95,6 +98,13 @@ void retrieve_scale_factor::init_raw_histogram(TString input)
     }
 }
 
+void retrieve_scale_factor::print_default_value(TString input)
+{
+    set_type_sys_uncertainty(input);
+    double sf = h->GetBinContent(0, 0);
+    printf("default value = %5.3f\n\n", sf);
+}
+
 void retrieve_scale_factor::print_th2d_content(TString input)
 {
     set_type_sys_uncertainty(input);
@@ -172,3 +182,104 @@ void retrieve_scale_factor::print_overall_uncertainty()
     }
     printf("\n");
 }
+
+//---------------------------------------------------------------------------------------------------------------------//
+
+void retrieve_scale_factor::set_type_sys_uncertainty_v2(TString input)
+{
+    type_sys_uncertainty = input;
+    h_up   = (TH2D*) file->Get(type_sys_uncertainty + "Up");
+    h_down = (TH2D*) file->Get(type_sys_uncertainty + "Down");
+    if(debug_) printf("type:%s\n", type_sys_uncertainty.Data());
+}
+
+void retrieve_scale_factor::init_raw_histogram_v2(TString input)
+{
+    set_type_sys_uncertainty(input);
+    h_raw = (TH2D*) h->Clone();
+    h_rec_positive = (TH2D*) h->Clone();
+    h_rec_negative = (TH2D*) h->Clone();
+
+    int nbinx = h->GetNbinsX();
+    int nbiny = h->GetNbinsY();
+
+    for(int j=0; j < nbiny; ++j)
+    {
+        for(int i=0; i < nbinx; ++i)
+        {
+            h_rec_positive -> SetBinContent(i+1, nbiny - j, 0.);
+            h_rec_negative -> SetBinContent(i+1, nbiny - j, 0.);
+        }
+    }
+}
+
+void retrieve_scale_factor::accumulate_th2d_uncertainty_v2(TString input)
+{
+    set_type_sys_uncertainty_v2(input);
+    int nbinx = h_up->GetNbinsX();
+    int nbiny = h_up->GetNbinsY();
+
+    for(int j=0; j < nbiny; ++j)
+    {
+        for(int i=0; i < nbinx; ++i)
+        {
+            double ref = h_raw->GetBinContent(i+1, nbiny - j);
+            double sf_up   = h_up->GetBinContent(i+1, nbiny - j);
+            double sf_down = h_down->GetBinContent(i+1, nbiny - j);
+            double err_up   = (sf_up - ref);
+            double err_down = (sf_down - ref);
+
+            store_unc_v2(err_up, i+1, nbiny - j);
+            //store_unc_v2(err_down);
+        }
+    }
+}
+
+void retrieve_scale_factor::store_unc_v2(double err, int binx, int biny)
+{
+    if(err > 0) 
+    {
+        double unc = h_rec_positive->GetBinContent(binx, biny);
+        double unc_new = sqrt(pow(unc, 2) + pow(err, 2));
+        h_rec_positive->SetBinContent(binx, biny, unc_new);
+    } else{
+        double unc = h_rec_negative->GetBinContent(binx, biny);
+        double unc_new = sqrt(pow(unc, 2) + pow(err, 2));
+        h_rec_negative->SetBinContent(binx, biny, unc_new);
+    }
+}
+
+void retrieve_scale_factor::print_overall_uncertainty_v2()
+{
+    printf("check final total uncertainties:\n");
+    int nbinx = h_rec_positive->GetNbinsX();
+    int nbiny = h_rec_positive->GetNbinsY();
+
+    for(int j=0; j < nbiny; ++j)
+    {
+        for(int i=0; i < nbinx; ++i)
+        {
+            double err_positive = h_rec_positive->GetBinContent(i+1, nbiny - j);
+            double err_negative = h_rec_negative->GetBinContent(i+1, nbiny - j);
+            double err = err_positive > err_negative ? err_positive : err_negative;
+            printf("%4.2f ", err);
+        }
+        printf("\n");
+    }
+    printf("\n");
+
+
+    for(int j=0; j < nbiny; ++j)
+    {
+        for(int i=0; i < nbinx; ++i)
+        {
+            double err_positive = h_rec_positive->GetBinContent(i+1, nbiny - j);
+            double err_negative = h_rec_negative->GetBinContent(i+1, nbiny - j);
+            double err = err_positive < err_negative ? err_positive : err_negative;
+            printf("%4.2f ", err);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+

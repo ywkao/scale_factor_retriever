@@ -42,8 +42,8 @@ build/hello.o: interface/hello.cpp interface/hello.h
 #	$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 bin/hello: $(OBJ)
-	@mkdir -p bin
 	@echo "Linking..."
+	@mkdir -p bin
 	$(CC) -o $@ $^ $(CFLAGS) $(LIB)
 
 .PHONY: clean
